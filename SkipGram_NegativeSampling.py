@@ -1,11 +1,20 @@
 import numpy as np
+from typing import Dict
 
 def sigmoid(x):
     x = np.clip(x, -50, 50)
     return 1.0 / (1.0 + np.exp(-x))
 
 class Word2VecSGNS:
-    def __init__(self, vocab_size: int, dim: int, lr: float = 0.05, seed: int = 42):
+    def __init__(
+            self,
+            vocab_size: int,
+            dim: int,
+            word2id: Dict[str, int],
+            id2word: Dict[int, str],
+            lr: float = 0.05,
+            seed: int = 42,
+    ):
         rng = np.random.default_rng(seed)
         self.V = rng.normal(0.0, 0.01, size=(vocab_size, dim)).astype(np.float64)  # central embeddings
         self.U = rng.normal(0.0, 0.01, size=(vocab_size, dim)).astype(np.float64)  # context embeddings
@@ -14,6 +23,8 @@ class Word2VecSGNS:
         self.dU = np.zeros_like(self.U)
         self.lr = lr
         self.cache = None
+        self.word2id = word2id
+        self.id2word = id2word
 
     def zero_grad(self):
         self.dV.fill(0.0)
@@ -67,6 +78,30 @@ class Word2VecSGNS:
         neg_flat = neg_ids.reshape(-1)                               # (B*K,)
         du_neg_flat = du_neg.reshape(-1, du_neg.shape[-1])           # (B*K, D)
         np.add.at(self.dU, neg_flat, du_neg_flat)
+
+    def save(self, path: str):
+        np.savez(
+            path,
+            V=self.V,
+            U=self.U,
+            lr=self.lr,
+            word2id=self.word2id,
+            id2word=self.id2word
+        )
+
+    def load(self, path: str):
+        data = np.load(path, allow_pickle=True)
+
+        self.V = data["V"]
+        self.U = data["U"]
+        self.lr = float(data["lr"])
+
+        self.word2id = data["word2id"].item()
+        self.id2word = data["id2word"].item()
+
+        self.dV = np.zeros_like(self.V)
+        self.dU = np.zeros_like(self.U)
+        self.cache = None
 
     def step(self):
         self.V -= self.lr * self.dV
